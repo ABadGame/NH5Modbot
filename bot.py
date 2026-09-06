@@ -8,19 +8,17 @@ intents.message_content = True  # Required for prefix commands!
 intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-APP_ID = "1265860"  # Steam Game ID here
-STEAM_API_URL = f"https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid={APP_ID}"
-
+STATS_API_URL = "http://72.39.41.141:8000/stats"
 VOICE_CHANNEL_ID = 1543832033523146782
 
 
-def get_steam_player_count():
+def get_server_player_count():
     try:
-        response = requests.get(STEAM_API_URL, timeout=10)
+        response = requests.get(STATS_API_URL, timeout=10)
         data = response.json()
-        return data["response"].get("player_count", 0)
+        return data.get("active_players", 0)
     except Exception as e:
-        print(f"Error fetching Steam API: {e}")
+        print(f"Error fetching Stats API: {e}")
         return None
 
 
@@ -39,7 +37,7 @@ async def process_player_count(count):
 
 @tasks.loop(minutes=10)
 async def update_player_count_loop():
-    count = get_steam_player_count()
+    count = get_server_player_count()
     if count is not None:
         await process_player_count(count)
 
