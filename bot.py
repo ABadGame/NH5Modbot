@@ -9,49 +9,65 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 STATS_API_URL = "http://72.39.41.141:8000/stats"
-VOICE_CHANNEL_ID = 1543832033523146782
+
+# Replace these with your actual Voice Channel IDs
+PLAYERS_VC_ID = 1543832033523146782
+LOBBIES_VC_ID = 
 
 
-def get_server_player_count():
+def get_server_stats():
+    """Fetches stats from the API and returns a tuple (players, lobbies)."""
     try:
         response = requests.get(STATS_API_URL, timeout=10)
         data = response.json()
-        return data.get("active_players", 0)
+        
+        players = data.get("active_players", 0)
+        lobbies = data.get("active_lobbies", 0)
+        
+        return players, lobbies
     except Exception as e:
         print(f"Error fetching Stats API: {e}")
-        return None
+        return None, None
 
 
-async def process_player_count(count):
-    """Core logic to update presence and voice channel name."""
-    activity = discord.Game(name=f"NASCAR Heat 5 ({count} online)")
+async def update_voice_channel(channel_id, new_name):
+    """Helper to safely update a voice channel name."""
+    channel = bot.get_channel(channel_id)
+    if channel:
+        try:
+            await channel.edit(name=new_name)
+        except discord.HTTPException as e:
+            print(f"Failed to update channel {channel_id}: {e}")
+
+
+async def process_stats(players, lobbies):
+    """Core logic to update status presence and both voice channels."""
+    # Update Bot Status
+    activity = discord.Game(name=f"NH5: {players} Players | {lobbies} Lobbies")
     await bot.change_presence(activity=activity)
 
-    vc_channel = bot.get_channel(VOICE_CHANNEL_ID)
-    if vc_channel:
-        try:
-            await vc_channel.edit(name=f"🔴 NH5 Online: {count}")
-        except discord.HTTPException as e:
-            print(f"Failed to update voice channel name: {e}")
+    # Update Voice Channels
+    await update_voice_channel(PLAYERS_VC_ID, f"🔴 NH5 Players: {players}")
+    await update_voice_channel(LOBBIES_VC_ID, f"🏁 NH5 Lobbies: {lobbies}")
 
 
 @tasks.loop(minutes=10)
-async def update_player_count_loop():
-    count = get_server_player_count()
-    if count is not None:
-        await process_player_count(count)
+async def update_stats_loop():
+    players, lobbies = get_server_stats()
+    if players is not None and lobbies is not None:
+        await process_stats(players, lobbies)
 
 
-@update_player_count_loop.before_loop
-async def before_update_player_count():
+@update_stats_loop.before_loop
+async def before_update_stats():
     await bot.wait_until_ready()
 
 
 @bot.event
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
-    if not update_player_count_loop.is_running():
-        update_player_count_loop.start()
+    if not update_stats_loop.is_running():
+        update_stats_loop.start()
 
 
 bot.run(os.getenv("DISCORD_TOKEN"))
