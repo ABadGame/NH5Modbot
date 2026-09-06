@@ -43,7 +43,7 @@ async def update_voice_channel(channel_id, new_name):
 async def process_stats(players, lobbies):
     """Core logic to update status presence and both voice channels."""
     # Update Bot Status
-    activity = discord.Game(name=f"NH5: {players} Players | {lobbies} Lobbies")
+    activity = discord.Game(name=f"NH5MP: {players} Players | {lobbies} Lobbies")
     await bot.change_presence(activity=activity)
 
     # Update Voice Channels
