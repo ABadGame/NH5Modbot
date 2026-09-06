@@ -10,7 +10,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 STATS_API_URL = "http://72.39.41.141:8000/stats"
 
-# Replace these with your actual Voice Channel IDs
 PLAYERS_VC_ID = 1543832033523146782
 LOBBIES_VC_ID = 1546259866207785010
 
@@ -35,39 +34,46 @@ async def update_voice_channel(channel_id, new_name):
     channel = bot.get_channel(channel_id)
     if channel:
         try:
-            await channel.edit(name=new_name)
+            # Avoid sending unnecessary edit calls if the name hasn't changed
+            if channel.name != new_name:
+                await channel.edit(name=new_name)
         except discord.HTTPException as e:
             print(f"Failed to update channel {channel_id}: {e}")
 
 
-async def process_stats(players, lobbies):
-    """Core logic to update status presence and both voice channels."""
-    # Update Bot Status
-    activity = discord.Game(name=f"NH5MP: {players} Players | {lobbies} Lobbies")
-    await bot.change_presence(activity=activity)
-
-    # Update Voice Channels
-    await update_voice_channel(PLAYERS_VC_ID, f"🔴 NH5 Players: {players}")
-    await update_voice_channel(LOBBIES_VC_ID, f"🏁 NH5 Lobbies: {lobbies}")
-
-
-@tasks.loop(minutes=10)
-async def update_stats_loop():
+# Loop 1: Fast update for Discord presence (Every 30 seconds)
+@tasks.loop(seconds=30)
+async def update_presence_loop():
     players, lobbies = get_server_stats()
     if players is not None and lobbies is not None:
-        await process_stats(players, lobbies)
+        activity = discord.Game(name=f"NH5MP: {players} Players | {lobbies} Lobbies")
+        await bot.change_presence(activity=activity)
 
 
-@update_stats_loop.before_loop
-async def before_update_stats():
+# Loop 2: Slow update for Voice Channels to respect Discord rate limits (Every 10 minutes)
+@tasks.loop(minutes=10)
+async def update_channels_loop():
+    players, lobbies = get_server_stats()
+    if players is not None and lobbies is not None:
+        await update_voice_channel(PLAYERS_VC_ID, f"🔴 Active Players: {players}")
+        await update_voice_channel(LOBBIES_VC_ID, f"🏁 Active Lobbies: {lobbies}")
+
+
+@update_presence_loop.before_loop
+@update_channels_loop.before_loop
+async def before_loops():
     await bot.wait_until_ready()
 
 
 @bot.event
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
-    if not update_stats_loop.is_running():
-        update_stats_loop.start()
+    
+    if not update_presence_loop.is_running():
+        update_presence_loop.start()
+        
+    if not update_channels_loop.is_running():
+        update_channels_loop.start()
 
 
 bot.run(os.getenv("DISCORD_TOKEN"))
