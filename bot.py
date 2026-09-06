@@ -12,7 +12,7 @@ STATS_API_URL = "http://72.39.41.141:8000/stats"
 
 # Replace these with your actual Voice Channel IDs
 PLAYERS_VC_ID = 1543832033523146782
-LOBBIES_VC_ID = 
+LOBBIES_VC_ID = 1546259866207785010
 
 
 def get_server_stats():
