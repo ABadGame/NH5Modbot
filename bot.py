@@ -11,6 +11,7 @@ Run: DISCORD_TOKEN=... python nh5mp_bot.py   (listens on $PORT, else $HEARTBEAT_
 On Railway: service Settings > Networking > Generate Domain (target port = the service's PORT) gives https://<name>.up.railway.app
 Game setting: presence_url = https://<name>.up.railway.app/heartbeat   (check: open https://<name>.up.railway.app/stats)
 """
+import asyncio
 import json
 import os
 import time
@@ -148,7 +149,6 @@ async def start_heartbeat_server():
 @bot.event
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
-    await start_heartbeat_server()
 
     if not update_presence_loop.is_running():
         update_presence_loop.start()
@@ -157,4 +157,25 @@ async def on_ready():
         update_channels_loop.start()
 
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+async def main():
+    # The heartbeat listener starts FIRST and stays up even while Discord refuses the login, so the games' heartbeats are
+    # always answered and counted.
+    await start_heartbeat_server()
+    token = os.getenv("DISCORD_TOKEN")
+    wait = 15 * 60
+    while True:
+        try:
+            await bot.login(token)  # a refused login doesn't close the client, so it can simply be tried again
+            break
+        except discord.HTTPException as e:
+            if e.status != 429:
+                raise
+            # Discord / Cloudflare rate limit (error 1015: often the shared host IP). Crashing makes the host restart the bot
+            # every few seconds, and every retry keeps the block going - wait instead, longer each time (max 1 h).
+            print(f"Discord rate limited the login (429). Waiting {wait // 60} min before trying again.")
+            await asyncio.sleep(wait)
+            wait = min(wait * 2, 60 * 60)
+    await bot.connect(reconnect=True)
+
+
+asyncio.run(main())
