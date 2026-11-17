@@ -1,6 +1,6 @@
-"""NH5MP Discord bot: active players / lobbies = the community server's /stats + SteamNet players.
+"""NH5MP Discord bot: active players / lobbies from SteamNet heartbeats (+ $STATS_API_URL's /stats if set).
 
-SteamNet races run over Steam, so the community server can't see them. Every SteamNet game (loader with presence_url set in
+Every SteamNet game (loader with presence_url set in
 H5TrackLoader/steamnet/steamnet_settings.txt) POSTs a small JSON heartbeat to this bot every 30 s while Multiplayer is open:
   {"steam_id": "...", "name": "...", "proto": "5", "state": "menu|lobby|loading|racing|results|spectating|offline",
    "game_id": "...", "is_host": true, "players": 2, "cap": 20, "track": "...", "series": "CUP", "private": false}
@@ -26,7 +26,8 @@ intents.message_content = True  # Required for prefix commands!
 intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-STATS_API_URL = "http://72.39.41.141:8000/stats"
+# Optional extra /stats source to add on top (e.g. your own services app). Empty = SteamNet heartbeats only.
+STATS_API_URL = os.getenv("STATS_API_URL", "")
 
 PLAYERS_VC_ID = 1543832033523146782
 LOBBIES_VC_ID = 1546259866207785010
@@ -82,6 +83,8 @@ async def stats(request):
 def get_server_stats():
     """Community server /stats + SteamNet heartbeats. Returns (players, lobbies), or (None, None) if nothing could be read."""
     sn_players, sn_lobbies = steamnet_counts()
+    if not STATS_API_URL:
+        return sn_players, sn_lobbies
     try:
         response = requests.get(STATS_API_URL, timeout=10)
         data = response.json()
